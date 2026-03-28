@@ -29,7 +29,7 @@ def connect():
     sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
         client_id=os.getenv("SPOTIFY_CLIENT_ID"),
         client_secret=os.getenv("SPOTIFY_CLIENT_SECRET"),
-        redirect_uri=os.getenv("SPOTIFY_REDIRECT_URI", "http://localhost:8080"),
+        redirect_uri=os.getenv("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8080"),
         scope="user-modify-playback-state user-read-playback-state"
     ))
     user = sp.current_user()
