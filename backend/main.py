@@ -11,7 +11,7 @@ import classifier
 import spotify
 import server
 
-POLL_INTERVAL = 10   # seconds between EEG reads
+POLL_INTERVAL = 5    # seconds between reads (API updates ~every 1s)
 
 
 def main(demo_mode=False):
@@ -29,13 +29,15 @@ def main(demo_mode=False):
 
     # 3. Connect to EEG (or run in demo mode)
     if demo_mode:
-        print("[Main] Running in DEMO MODE - no hardware needed")
+        print("[Main] Running in DEMO MODE - simulated EEG")
+        eeg.set_demo_mode(True)
     else:
         try:
             eeg.connect()
         except Exception as e:
-            print(f"[Main] EEG connection failed: {e}")
+            print(f"[Main] EEG API connection failed: {e}")
             print("[Main] Falling back to DEMO MODE")
+            eeg.set_demo_mode(True)
 
     # 4. Main loop
     current_state = None
@@ -57,7 +59,7 @@ def main(demo_mode=False):
                 spotify.switch_music(state)
                 current_state = state
             else:
-                print(f"  Holding {state:12s} | a={bands['alpha']:.2f}  b={bands['beta']:.2f}  t={bands['theta']:.2f}")
+                print(f"  Holding {state:12s} | a/t={bands.get('alpha_theta_ratio',0):.3f}  paf={bands.get('paf_hz',0):.1f}Hz  q={bands.get('quality','?')}")
 
             time.sleep(POLL_INTERVAL)
 

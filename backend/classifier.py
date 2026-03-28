@@ -1,55 +1,74 @@
 """
-classifier.py - Brainwave state classifier
-OWNER: Belle / anyone
-Rule-based v1 — replace body of classify_state() with ML model later.
+classifier.py - Mental state classifier using live OpenBCI API metrics
+OWNER: Anyone
+Uses pre-computed API ratios (much more reliable than raw band power).
 """
 
-# Thresholds — tune these during calibration with the actual user
-ALPHA_BETA_FOCUS_RATIO = 0.8    # below this → likely focused (beta dominant)
-ALPHA_BETA_CALM_RATIO  = 1.2    # above this → likely calm  (alpha dominant)
-THETA_MEDITATIVE_MIN   = 1.4    # theta spike → meditative / drowsy
+# ── THRESHOLDS ───────────────────────────────────────────────────────────────
+# Tune these after watching a few minutes of the person's live data
+PAF_FOCUSED_MIN      = 10.0   # Hz - peak alpha freq above this = alert/focused
+ALPHA_THETA_CALM_MIN = 0.25   # above this = calm (alpha dominant over theta)
+ALPHA_THETA_MED_MIN  = 0.40   # above this = meditative
+GAMMA_DELTA_FOCUS    = 0.012  # above this = high cognitive engagement
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def classify_state(bands: dict) -> str:
     """
-    Classify mental state from band power dict.
+    Classify mental state from API metrics dict.
 
-    Args:
-        bands: {"delta": float, "theta": float, "alpha": float,
-                "beta": float, "gamma": float}
-
-    Returns:
-        One of: "focused" | "calm" | "meditative" | "neutral"
+    Priority order: artifact check -> meditative -> focused -> calm -> neutral
     """
-    if bands is None:
+    if not bands:
         return "neutral"
 
-    alpha = bands.get("alpha", 1.0)
-    beta  = bands.get("beta",  1.0)
-    theta = bands.get("theta", 1.0)
+    # If hardware artifact detected, hold current state
+    if bands.get("artifact_flag", False):
+        print("[Classifier] Artifact detected - skipping this window")
+        return "neutral"
 
-    ratio = alpha / (beta + 1e-6)   # avoid division by zero
+    quality = bands.get("quality", "unknown")
+    if quality == "poor":
+        print("[Classifier] Poor signal quality - skipping")
+        return "neutral"
 
-    if theta > THETA_MEDITATIVE_MIN and ratio > ALPHA_BETA_CALM_RATIO:
+    alpha_theta = bands.get("alpha_theta_ratio", 0.0)
+    gamma_delta = bands.get("gamma_delta_ratio", 0.0)
+    paf_hz      = bands.get("paf_hz",            10.0)
+
+    # Meditative: high alpha/theta ratio + low peak alpha freq (slow brain)
+    if alpha_theta >= ALPHA_THETA_MED_MIN and paf_hz < 9.5:
         return "meditative"
-    elif ratio >= ALPHA_BETA_CALM_RATIO:
-        return "calm"
-    elif ratio <= ALPHA_BETA_FOCUS_RATIO:
+
+    # Focused: fast peak alpha + high gamma/delta engagement
+    if paf_hz >= PAF_FOCUSED_MIN and gamma_delta >= GAMMA_DELTA_FOCUS:
         return "focused"
-    else:
-        return "neutral"
+
+    # Calm: good alpha/theta ratio without the focus markers
+    if alpha_theta >= ALPHA_THETA_CALM_MIN:
+        return "calm"
+
+    return "neutral"
 
 
 def get_state_description(state: str) -> dict:
-    """Return UI metadata for each state."""
+    """Return display metadata for each state."""
     meta = {
-        "focused":    {"emoji": "🎯", "color": "#4A90D9", "bpm_target": "80-100",
-                       "description": "High beta — sharp focus mode"},
-        "calm":       {"emoji": "🌊", "color": "#50C878", "bpm_target": "60-75",
-                       "description": "Alpha dominant — relaxed awareness"},
-        "meditative": {"emoji": "🧘", "color": "#9B59B6", "bpm_target": "40-60",
-                       "description": "Theta rising — deep calm"},
-        "neutral":    {"emoji": "⚡", "color": "#F39C12", "bpm_target": "70-85",
-                       "description": "Balanced state"},
+        "focused": {
+            "emoji": "TARGET", "color": "#4A90D9",
+            "description": "High PAF + gamma/delta - sharp focus mode"
+        },
+        "calm": {
+            "emoji": "WAVE", "color": "#50C878",
+            "description": "Alpha dominant - relaxed awareness"
+        },
+        "meditative": {
+            "emoji": "ZEN", "color": "#9B59B6",
+            "description": "Theta rising + slow alpha - deep calm"
+        },
+        "neutral": {
+            "emoji": "BOLT", "color": "#F39C12",
+            "description": "Balanced / transitioning"
+        },
     }
     return meta.get(state, meta["neutral"])
