@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vibe Focus — EEG Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0d0d1a;
+      color: #e0e0ff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
+    }
+    h1 { font-size: 1.6rem; letter-spacing: 0.15em; margin-bottom: 0.3rem; color: #a0a0ff; }
+    .subtitle { font-size: 0.85rem; color: #555577; margin-bottom: 2rem; }
+
+    .state-badge {
+      font-size: 4rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      padding: 1rem 2.5rem;
+      border-radius: 1.5rem;
+      border: 2px solid currentColor;
+      margin-bottom: 2rem;
+      transition: all 0.6s ease;
+      text-shadow: 0 0 30px currentColor;
+    }
+    .state-focused    { color: #4A90D9; border-color: #4A90D9; }
+    .state-calm       { color: #50C878; border-color: #50C878; }
+    .state-meditative { color: #9B59B6; border-color: #9B59B6; }
+    .state-neutral    { color: #F39C12; border-color: #F39C12; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; width: 100%; max-width: 860px; }
+
+    .card {
+      background: #14142a;
+      border-radius: 1rem;
+      padding: 1.2rem 1.5rem;
+      border: 1px solid #22224a;
+    }
+    .card h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: #5555aa; margin-bottom: 1rem; }
+
+    .band-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.6rem; }
+    .band-label { width: 55px; font-size: 0.8rem; color: #8888bb; }
+    .band-bar-bg { flex: 1; height: 8px; background: #22224a; border-radius: 4px; overflow: hidden; }
+    .band-bar { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
+    .band-val { width: 42px; font-size: 0.75rem; text-align: right; color: #aaaacc; }
+
+    .track-info { line-height: 1.9; }
+    .track-info .track-name  { font-size: 1.1rem; font-weight: 600; color: #e0e0ff; }
+    .track-info .track-artist { font-size: 0.9rem; color: #8888bb; }
+    .track-info .track-album  { font-size: 0.78rem; color: #55557a; }
+
+    .status-dot {
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 50%; background: #50C878;
+      margin-right: 6px; animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    .history-label { font-size: 0.7rem; color: #555577; margin-top: 0.4rem; text-align: center; }
+    canvas { max-height: 120px; }
+  </style>
+</head>
+<body>
+  <h1>🎵 VIBE FOCUS</h1>
+  <p class="subtitle">EEG-Adaptive Music · OpenBCI + Spotify</p>
+
+  <div class="state-badge state-neutral" id="stateBadge">⚡ NEUTRAL</div>
+
+  <div class="grid">
+
+    <!-- Band Powers card -->
+    <div class="card">
+      <h3>Band Powers</h3>
+      <div class="band-row">
+        <span class="band-label">Delta</span>
+        <div class="band-bar-bg"><div class="band-bar" id="bar-delta" style="width:0%;background:#6c6cff"></div></div>
+        <span class="band-val" id="val-delta">0.00</span>
+      </div>
+      <div class="band-row">
+        <span class="band-label">Theta</span>
+        <div class="band-bar-bg"><div class="band-bar" id="bar-theta" style="width:0%;background:#9B59B6"></div></div>
+        <span class="band-val" id="val-theta">0.00</span>
+      </div>
+      <div class="band-row">
+        <span class="band-label">Alpha</span>
+        <div class="band-bar-bg"><div class="band-bar" id="bar-alpha" style="width:0%;background:#50C878"></div></div>
+        <span class="band-val" id="val-alpha">0.00</span>
+      </div>
+      <div class="band-row">
+        <span class="band-label">Beta</span>
+        <div class="band-bar-bg"><div class="band-bar" id="bar-beta" style="width:0%;background:#4A90D9"></div></div>
+        <span class="band-val" id="val-beta">0.00</span>
+      </div>
+      <div class="band-row">
+        <span class="band-label">Gamma</span>
+        <div class="band-bar-bg"><div class="band-bar" id="bar-gamma" style="width:0%;background:#F39C12"></div></div>
+        <span class="band-val" id="val-gamma">0.00</span>
+      </div>
+    </div>
+
+    <!-- Now Playing card -->
+    <div class="card">
+      <h3><span class="status-dot"></span>Now Playing</h3>
+      <div class="track-info">
+        <div class="track-name"  id="trackName">Waiting...</div>
+        <div class="track-artist" id="trackArtist">—</div>
+        <div class="track-album"  id="trackAlbum">—</div>
+      </div>
+    </div>
+
+    <!-- History chart — full width -->
+    <div class="card" style="grid-column:1/-1">
+      <h3>Alpha / Beta History</h3>
+      <canvas id="histChart"></canvas>
+      <p class="history-label">Last 60 readings · updates every 10s</p>
+    </div>
+
+  </div>
+<script>
+  const STATE_COLORS = {
+    focused:    "#4A90D9",
+    calm:       "#50C878",
+    meditative: "#9B59B6",
+    neutral:    "#F39C12",
+  };
+  const STATE_LABELS = {
+    focused: "🎯 FOCUSED", calm: "🌊 CALM",
+    meditative: "🧘 MEDITATIVE", neutral: "⚡ NEUTRAL",
+  };
+
+  // Chart.js history chart
+  const ctx = document.getElementById("histChart").getContext("2d");
+  const histData = { labels: [], datasets: [
+    { label: "Alpha", data: [], borderColor: "#50C878", tension: 0.4, fill: false, pointRadius: 2 },
+    { label: "Beta",  data: [], borderColor: "#4A90D9", tension: 0.4, fill: false, pointRadius: 2 },
+  ]};
+  const chart = new Chart(ctx, {
+    type: "line", data: histData,
+    options: {
+      animation: false,
+      plugins: { legend: { labels: { color: "#8888bb", font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: "#555577", maxTicksLimit: 8 }, grid: { color: "#1a1a3a" } },
+        y: { ticks: { color: "#555577" }, grid: { color: "#1a1a3a" } },
+      }
+    }
+  });
+
+  function updateBars(bands) {
+    const MAX = 5;
+    ["delta","theta","alpha","beta","gamma"].forEach(b => {
+      const pct = Math.min((bands[b] / MAX) * 100, 100).toFixed(1);
+      document.getElementById(`bar-${b}`).style.width = pct + "%";
+      document.getElementById(`val-${b}`).textContent  = (bands[b] || 0).toFixed(2);
+    });
+  }
+
+  function updateState(state) {
+    const badge = document.getElementById("stateBadge");
+    badge.textContent  = STATE_LABELS[state] || state.toUpperCase();
+    badge.className    = `state-badge state-${state}`;
+  }
+
+  function updateTrack(track) {
+    document.getElementById("trackName").textContent   = track.track  || "—";
+    document.getElementById("trackArtist").textContent = track.artist || "—";
+    document.getElementById("trackAlbum").textContent  = track.album  || "—";
+  }
+
+  function pushHistory(bands) {
+    const t = new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", second:"2-digit"});
+    histData.labels.push(t);
+    histData.datasets[0].data.push(+(bands.alpha || 0).toFixed(2));
+    histData.datasets[1].data.push(+(bands.beta  || 0).toFixed(2));
+    if (histData.labels.length > 60) {
+      histData.labels.shift();
+      histData.datasets.forEach(d => d.data.shift());
+    }
+    chart.update();
+  }
+
+  // Connect via WebSocket (live) with polling fallback
+  const socket = io("http://localhost:5000", { transports: ["websocket","polling"] });
+
+  socket.on("connect",      () => console.log("✅ WebSocket connected"));
+  socket.on("disconnect",   () => console.log("⚠️  WebSocket disconnected — polling fallback"));
+
+  socket.on("state_update", data => {
+    updateState(data.state);
+    updateBars(data.bands);
+    updateTrack(data.track);
+    pushHistory(data.bands);
+  });
+
+  // Polling fallback every 3s (when WebSocket is unavailable)
+  setInterval(() => {
+    if (!socket.connected) {
+      fetch("http://localhost:5000/state")
+        .then(r => r.json())
+        .then(data => {
+          updateState(data.state);
+          updateBars(data.bands);
+          updateTrack(data.track);
+          pushHistory(data.bands);
+        }).catch(() => {});
+    }
+  }, 3000);
+</script>
+</body>
+</html>

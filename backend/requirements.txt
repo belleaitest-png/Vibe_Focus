@@ -1,0 +1,7 @@
+brainflow
+spotipy
+flask
+flask-socketio
+flask-cors
+python-dotenv
+numpy
