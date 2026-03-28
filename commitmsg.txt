@@ -1,1 +1,1 @@
-remove temp commitmsg file
+fix emoji encoding and flask werkzeug flag

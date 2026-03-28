@@ -1,5 +1,5 @@
 """
-main.py - Entry point. Wires EEG → Classifier → Spotify + Server
+main.py - Entry point. Wires EEG -> Classifier -> Spotify + Server
 OWNER: Belle
 Run: python main.py
      python main.py --demo     (no hardware, simulated EEG)
@@ -16,20 +16,20 @@ POLL_INTERVAL = 10   # seconds between EEG reads
 
 def main(demo_mode=False):
     print("=" * 50)
-    print("  🎵  Vibe Focus — EEG Adaptive Music")
+    print("  VIBE FOCUS - EEG Adaptive Music")
     print("=" * 50)
 
     # 1. Start Flask server in background thread
     t = threading.Thread(target=server.run_server, daemon=True)
     t.start()
-    print("[Main] Dashboard server running at http://localhost:5000")
+    print("[Main] Dashboard server running at http://127.0.0.1:5000")
 
     # 2. Connect to Spotify
     spotify.connect()
 
     # 3. Connect to EEG (or run in demo mode)
     if demo_mode:
-        print("[Main] Running in DEMO MODE — no hardware needed")
+        print("[Main] Running in DEMO MODE - no hardware needed")
     else:
         try:
             eeg.connect()
@@ -39,7 +39,7 @@ def main(demo_mode=False):
 
     # 4. Main loop
     current_state = None
-    print(f"\n[Main] Starting loop (every {POLL_INTERVAL}s) — Ctrl+C to stop\n")
+    print(f"\n[Main] Starting loop (every {POLL_INTERVAL}s) - Ctrl+C to stop\n")
 
     try:
         while True:
@@ -53,11 +53,11 @@ def main(demo_mode=False):
 
             # Only switch music on state change
             if state != current_state:
-                print(f"  {meta['emoji']}  State → {state.upper():12s} | {meta['description']}")
+                print(f"  State -> {state.upper():12s} | {meta['description']}")
                 spotify.switch_music(state)
                 current_state = state
             else:
-                print(f"  {meta['emoji']}  Holding {state:12s} | α={bands['alpha']:.2f}  β={bands['beta']:.2f}  θ={bands['theta']:.2f}")
+                print(f"  Holding {state:12s} | a={bands['alpha']:.2f}  b={bands['beta']:.2f}  t={bands['theta']:.2f}")
 
             time.sleep(POLL_INTERVAL)
 

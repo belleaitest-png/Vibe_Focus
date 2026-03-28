@@ -63,7 +63,7 @@ def update_shared_state(state, bands, track):
 
 
 def run_server():
-    socketio.run(app, host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=False, use_reloader=False, allow_unsafe_werkzeug=True)
 
 
 if __name__ == "__main__":

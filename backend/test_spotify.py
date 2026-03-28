@@ -1,0 +1,2 @@
+import spotify
+spotify.connect()
